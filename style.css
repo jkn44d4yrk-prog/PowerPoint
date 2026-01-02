@@ -1,5 +1,5 @@
 :root {
-  --bg: #B91C1C; /* Fondo verde oscuro */
+  --bg: #4b6cb7; /* Fondo verde oscuro */
   --panel: rgba(255, 255, 255, 0.06);
   --stroke: rgba(255, 255, 255, 0.10);
   --text: rgba(255, 255, 255, 0.92);
@@ -24,18 +24,6 @@ body {
 }
 
 h1 {
-  .title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.title-logo {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-}
   text-align: center;
   margin: 10px 0 18px;
   font-size: clamp(22px, 2.6vw, 30px);
@@ -254,10 +242,10 @@ button.correct {
 
 /* Respuesta incorrecta (rojo brillante con borde rojo intenso y sombra) */
 button.incorrect {
-  background: rgba(234, 179, 8, 0.6) !important;  /* Amarillo */
-  border: 2px solid rgba(234, 179, 8, 1) !important; /* Borde amarillo */
-  color: rgba(0, 0, 0, 0.98) !important;          /* Texto negro */
-  box-shadow: 0 0 8px rgba(234, 179, 8, 0.6);     /* Sombra amarilla */
+  background: rgba(239, 68, 68, 0.6) !important; /* Rojo brillante */
+  border: 2px solid rgba(239, 68, 68, 1) !important; /* Rojo intenso */
+  color: rgba(255, 255, 255, 0.98) !important; /* Texto blanco */
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); /* Sombra roja */
 }
 
 #blockMsg h2 {
