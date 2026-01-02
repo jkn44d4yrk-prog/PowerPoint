@@ -1,5 +1,6 @@
 :root {
-  --bg: #4b6cb7; /* Fondo verde oscuro */
+  /* Fondo base: rojo oscuro menos intenso */
+  --bg: #B91C1C; /* Rojo oscuro para un fondo menos agresivo */
   --panel: rgba(255, 255, 255, 0.06);
   --stroke: rgba(255, 255, 255, 0.10);
   --text: rgba(255, 255, 255, 0.92);
@@ -28,6 +29,79 @@ h1 {
   margin: 10px 0 18px;
   font-size: clamp(22px, 2.6vw, 30px);
   letter-spacing: 0.2px;
+}
+
+/* ================== Título con logo ================== */
+/* Ajusta el contenedor del título para mostrar el icono y el texto en línea */
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Tamaño del logotipo junto al título */
+.title-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+/* ================== Panel de estadísticas ================== */
+.stats-panel {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.stats-panel span {
+  display: inline-block;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ================== Contenedor de búsqueda ================== */
+.search-container {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-container input {
+  flex: 1;
+  min-width: 160px;
+  max-width: 240px;
+}
+
+/* ================== Contenedor de acciones (examen y marcadas) ================== */
+.menu-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* ================== Botón de estrella en las preguntas ================== */
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 8px;
+  padding: 0;
+}
+
+.star-btn.active {
+  color: gold;
 }
 
 #login, #menu, #test, #blockMsg {

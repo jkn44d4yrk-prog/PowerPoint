@@ -37,6 +37,20 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentIndex = 0;
   let currentSessionTitle = "BLOQUE";
 
+  // ================= EXTRA STATE FOR ADVANCED FEATURES =================
+  // currentStartIndex tracks the starting index of the current block (used for resume)
+  let currentStartIndex = 0;
+  // Set of starred question IDs loaded from localStorage
+  let starred = new Set();
+  try {
+    const storedStar = JSON.parse(localStorage.getItem("starredIds") || "[]");
+    if (Array.isArray(storedStar)) {
+      starred = new Set(storedStar);
+    }
+  } catch (_) {
+    // ignore parse errors
+  }
+
   // ================= UI HELPERS =================
   function showLoginError(msg) {
     if (!loginErrorEl) return alert(msg);
@@ -107,6 +121,133 @@ document.addEventListener("DOMContentLoaded", () => {
 
     state.history = state.history.filter(h => !ids.has(h.questionId));
     for (const id of ids) delete state.attempts[id];
+  }
+
+  // ================= STATS & RESUME HELPERS =================
+  // Update the small statistics panel in the menu (answered, correct, incorrect, dominated)
+  function updateStatsPanel() {
+    const panel = document.getElementById("statsPanel");
+    if (!panel) return;
+    const first = getFirstAttemptsMap();
+    let totalAnswered = first.size;
+    let totalCorrect = 0;
+    let totalIncorrect = 0;
+    for (const q of questions) {
+      const a = first.get(q.id);
+      if (!a) continue;
+      if (a.selected === a.correct) totalCorrect++;
+      else totalIncorrect++;
+    }
+    // Dominadas: preguntas con 3 o más intentos (aprox. dominadas)
+    let dominated = 0;
+    for (const id in state.attempts) {
+      const count = state.attempts[id];
+      if (count >= 3) dominated++;
+    }
+    panel.innerHTML =
+      `<span>Respondidas: ${totalAnswered}/${questions.length}</span>` +
+      `<span>Aciertos: ${totalCorrect}</span>` +
+      `<span>Fallos: ${totalIncorrect}</span>` +
+      `<span>Dominadas: ${dominated}</span>`;
+  }
+
+  // Toggle a question as starred/unstarred and persist to localStorage
+  function toggleStar(qId) {
+    if (starred.has(qId)) {
+      starred.delete(qId);
+    } else {
+      starred.add(qId);
+    }
+    // Persist starred IDs
+    try {
+      localStorage.setItem("starredIds", JSON.stringify(Array.from(starred)));
+    } catch (_) {}
+    updateReviewStarBtn();
+  }
+
+  // Update the "Repasar marcadas" button text and state
+  function updateReviewStarBtn() {
+    const btn = document.getElementById("reviewStarBtn");
+    if (!btn) return;
+    const n = starred.size;
+    btn.textContent = `Repasar marcadas (${n})`;
+    btn.disabled = n === 0;
+  }
+
+  // Store the current question ID for resume purposes
+  function updateResumeInfo(questionId) {
+    if (!questionId) return;
+    try {
+      localStorage.setItem("resumeQuestionId", String(questionId));
+    } catch (_) {}
+  }
+
+  // Resume where the user left off
+  function resume() {
+    const resumeId = localStorage.getItem("resumeQuestionId");
+    if (!resumeId) return;
+    const idx = questions.findIndex(q => String(q.id) === String(resumeId));
+    if (idx < 0) return;
+    const startIndex = Math.floor(idx / BLOCK_SIZE) * BLOCK_SIZE;
+    const localIndex = idx - startIndex;
+    // Start a normal block and then jump to the stored question
+    startBlock(startIndex, "NORMAL");
+    currentIndex = localIndex;
+    loadQuestion();
+  }
+
+  // Search for a block or question based on input value
+  function handleSearch() {
+    const input = document.getElementById("searchInput");
+    if (!input) return;
+    const val = (input.value || "").trim();
+    if (!val) return;
+    // Try numeric first
+    const num = parseInt(val, 10);
+    if (!isNaN(num)) {
+      if (num >= 1 && num <= questions.length) {
+        // go to specific question number
+        const idx = num - 1;
+        const startIndex = Math.floor(idx / BLOCK_SIZE) * BLOCK_SIZE;
+        const localIndex = idx - startIndex;
+        startBlock(startIndex, "NORMAL");
+        currentIndex = localIndex;
+        loadQuestion();
+        return;
+      }
+      const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
+      if (num >= 1 && num <= numBlocks) {
+        // go to specific block number
+        const startIndex = (num - 1) * BLOCK_SIZE;
+        startBlock(startIndex, "NORMAL");
+        return;
+      }
+    }
+    // Fallback: search by substring in the question text
+    const lc = val.toLowerCase();
+    const index = questions.findIndex(q => q.question && q.question.toLowerCase().includes(lc));
+    if (index >= 0) {
+      const startIndex = Math.floor(index / BLOCK_SIZE) * BLOCK_SIZE;
+      const localIndex = index - startIndex;
+      startBlock(startIndex, "NORMAL");
+      currentIndex = localIndex;
+      loadQuestion();
+    } else {
+      alert("No se encontró ningún bloque o pregunta que coincida.");
+    }
+  }
+
+  // Start a random exam session of 40 questions
+  function startExam() {
+    const count = Math.min(40, questions.length);
+    const idxs = Array.from({ length: questions.length }, (_, i) => i);
+    // Fisher-Yates shuffle
+    for (let i = idxs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
+    }
+    const selected = idxs.slice(0, count).map(i => questions[i]);
+    startCustomQuestions(selected, "EXAMEN");
   }
 
   // ✅ Top N preguntas más falladas (global, contando todos los intentos)
@@ -264,6 +405,65 @@ document.addEventListener("DOMContentLoaded", () => {
     menuEl.innerHTML = "";
     menuEl.appendChild(renderMenuTopbar());
 
+    // ===== Panel de estadísticas =====
+    const statsDiv = document.createElement("div");
+    statsDiv.id = "statsPanel";
+    statsDiv.className = "stats-panel";
+    menuEl.appendChild(statsDiv);
+    updateStatsPanel();
+
+    // ===== Botón para continuar donde se dejó =====
+    const resumeId = localStorage.getItem("resumeQuestionId");
+    if (resumeId) {
+      const resumeBtn = document.createElement("button");
+      resumeBtn.id = "resumeBtn";
+      resumeBtn.type = "button";
+      resumeBtn.textContent = "Continuar donde lo dejé";
+      resumeBtn.style.marginBottom = "16px";
+      resumeBtn.onclick = resume;
+      menuEl.appendChild(resumeBtn);
+    }
+
+    // ===== Buscador de bloques/preguntas =====
+    const searchDiv = document.createElement("div");
+    searchDiv.className = "search-container";
+    const searchInput = document.createElement("input");
+    searchInput.id = "searchInput";
+    searchInput.type = "text";
+    searchInput.placeholder = "Buscar bloque o pregunta…";
+    const searchBtn = document.createElement("button");
+    searchBtn.id = "searchBtn";
+    searchBtn.type = "button";
+    searchBtn.textContent = "Ir";
+    searchBtn.onclick = handleSearch;
+    searchDiv.appendChild(searchInput);
+    searchDiv.appendChild(searchBtn);
+    menuEl.appendChild(searchDiv);
+
+    // ===== Acciones: examen y marcadas =====
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "menu-actions";
+    const examBtn = document.createElement("button");
+    examBtn.id = "examBtn";
+    examBtn.type = "button";
+    examBtn.textContent = "Simulacro (40)";
+    examBtn.onclick = startExam;
+    actionsDiv.appendChild(examBtn);
+    const reviewStarBtn = document.createElement("button");
+    reviewStarBtn.id = "reviewStarBtn";
+    reviewStarBtn.type = "button";
+    reviewStarBtn.textContent = "Repasar marcadas";
+    reviewStarBtn.onclick = () => {
+      const list = questions.filter(q => starred.has(q.id));
+      if (list.length === 0) {
+        alert("No hay preguntas marcadas.");
+        return;
+      }
+      startCustomQuestions(list, "MARCADAS");
+    };
+    actionsDiv.appendChild(reviewStarBtn);
+    menuEl.appendChild(actionsDiv);
+
     const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
     const first = getFirstAttemptsMap();
 
@@ -343,11 +543,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     menuEl.appendChild(renderMenuFooter());
+
+    // Actualiza panel de estadísticas y botón de marcadas según el estado actual
+    updateStatsPanel();
+    updateReviewStarBtn();
   }
 
   // ================= SESIONES DE PREGUNTAS =================
   function startBlock(startIndex, mode) {
     currentSessionTitle = "BLOQUE";
+    currentStartIndex = startIndex;
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -366,6 +571,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function startCustomQuestions(qs, title) {
     currentSessionTitle = title || "REPASO";
+    // custom sessions do not belong to a fixed block
+    currentStartIndex = -1;
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -384,7 +591,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function loadQuestion() {
     const q = currentBlock[currentIndex];
-    questionEl.textContent = q.question;
+    // Render question text and star button
+    questionEl.textContent = "";
+    const qSpan = document.createElement("span");
+    qSpan.textContent = q.question;
+    questionEl.appendChild(qSpan);
+    // star button
+    const starBtn = document.createElement("button");
+    starBtn.className = "star-btn";
+    const isStarred = starred.has(q.id);
+    starBtn.innerHTML = isStarred ? "★" : "☆";
+    if (isStarred) starBtn.classList.add("active");
+    starBtn.onclick = () => {
+      toggleStar(q.id);
+      const active = starred.has(q.id);
+      starBtn.innerHTML = active ? "★" : "☆";
+      if (active) starBtn.classList.add("active");
+      else starBtn.classList.remove("active");
+    };
+    questionEl.appendChild(starBtn);
+
+    // Update resume info
+    updateResumeInfo(q.id);
+
     optionsEl.innerHTML = "";
     nextBtn.disabled = true;
 
@@ -444,6 +673,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const user = auth.currentUser;
     if (user) await saveProgress(user);
+
+    // After progress save, update stats panel and review-star button (if visible)
+    updateStatsPanel();
+    updateReviewStarBtn();
   };
 
   // ================= AUTH STATE =================
@@ -463,6 +696,27 @@ document.addEventListener("DOMContentLoaded", () => {
     loginEl.style.display = "none";
     await loadProgress(user);
     showMenu();
+  });
+
+  // ================= KEYBOARD SHORTCUTS =================
+  // Atajos de teclado globales:
+  // N → siguiente pregunta, B → volver al menú,
+  // R → repetir más falladas, C → continuar donde lo dejaste
+  document.addEventListener("keydown", (ev) => {
+    const tag = ev.target && ev.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    const key = ev.key.toLowerCase();
+    if (key === "n") {
+      if (nextBtn && !nextBtn.disabled) nextBtn.click();
+    } else if (key === "b") {
+      if (backToMenuBtn) backToMenuBtn.click();
+    } else if (key === "r") {
+      const btn = document.getElementById("repeatMostFailedBtn");
+      if (btn && !btn.disabled) btn.click();
+    } else if (key === "c") {
+      const btn = document.getElementById("resumeBtn");
+      if (btn) btn.click();
+    }
   });
 
 });
